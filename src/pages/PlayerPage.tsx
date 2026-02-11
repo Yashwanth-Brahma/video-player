@@ -16,7 +16,7 @@ import { getRelatedVideos, getNextVideo } from '../data/videoData';
 
 const PlayerPage: React.FC = () => {
     const { currentVideo, minimize, isPlayerOpen, setVideo, setSeekTime } = usePlayerStore();
-    const [showRelated, setShowRelated] = useState(false);
+    const [showRelated, setShowRelated] = useState(true);
 
     // Auto-play next state
     const [countdown, setCountdown] = useState<number | null>(null);

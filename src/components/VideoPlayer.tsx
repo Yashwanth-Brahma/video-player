@@ -31,6 +31,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
     const playerDivRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
     const [showControls, setShowControls] = useState(true);
+    const [hasStartedPlaying, setHasStartedPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -105,6 +106,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
                     onStateChange: (event: any) => {
                         if (event.data === window.YT.PlayerState.PLAYING) {
                             setPlaying(true);
+                            setHasStartedPlaying(true);
                             const dur = event.target.getDuration?.() || 0;
                             if (dur > 0) setDuration(dur);
                         } else if (event.data === window.YT.PlayerState.PAUSED) {
@@ -131,9 +133,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
             if (skipFeedbackTimerRef.current) clearTimeout(skipFeedbackTimerRef.current);
+            // Only save seekTime if we're still playing the same video
+            // (prevents overwriting seekTime:0 when a new video was just selected)
             try {
-                const t = playerRef.current?.getCurrentTime?.() || 0;
-                if (t > 0) setSeekTime(t);
+                const storeState = usePlayerStore.getState();
+                const storeVideoId = storeState.currentVideo?.youtubeId;
+                if (storeVideoId && storeVideoId === currentVideoIdRef.current) {
+                    const t = playerRef.current?.getCurrentTime?.() || 0;
+                    if (t > 0) setSeekTime(t);
+                }
             } catch (_) { }
             try { playerRef.current?.destroy?.(); } catch (_) { }
             playerRef.current = null;
@@ -207,8 +215,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
     const resetHideTimer = useCallback(() => {
         setShowControls(true);
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+        // Don't auto-hide controls until video has actually started playing
+        // (on iOS, autoplay may fail — user needs to see the play button)
+        if (!hasStartedPlaying) return;
         hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
-    }, []);
+    }, [hasStartedPlaying]);
 
     const showSkipFeedback = useCallback((label: string) => {
         setSkipFeedback(label);
