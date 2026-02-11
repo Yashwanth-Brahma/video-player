@@ -55,6 +55,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         iv_load_policy: 3,
         disablekb: 1,
         fs: 0,
+        cc_load_policy: 0,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
     };
 
     // Load YouTube API once
@@ -162,11 +164,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         } catch (_) { }
     }, [isPlaying, playerReady]);
 
-    // Fullscreen listener
+    // Fullscreen listener (standard + webkit)
     useEffect(() => {
-        const h = () => setIsFullscreen(!!document.fullscreenElement);
+        const h = () => setIsFullscreen(!!(
+            document.fullscreenElement || (document as any).webkitFullscreenElement
+        ));
         document.addEventListener('fullscreenchange', h);
-        return () => document.removeEventListener('fullscreenchange', h);
+        document.addEventListener('webkitfullscreenchange', h);
+        return () => {
+            document.removeEventListener('fullscreenchange', h);
+            document.removeEventListener('webkitfullscreenchange', h);
+        };
     }, []);
 
     // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -232,9 +240,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
     };
 
     const handleFullscreen = useCallback(() => {
-        if (!containerRef.current) return;
-        if (document.fullscreenElement) document.exitFullscreen();
-        else containerRef.current.requestFullscreen();
+        const el = containerRef.current as any;
+        if (!el) return;
+
+        // Check if already fullscreen
+        const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
+        if (fsEl) {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+            return;
+        }
+
+        // Try standard → webkit (Safari/iOS)
+        if (el.requestFullscreen) {
+            el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+            el.webkitRequestFullscreen();
+        } else {
+            // iOS fallback: fullscreen the iframe itself
+            const iframe = playerRef.current?.getIframe?.() as any;
+            if (iframe?.webkitEnterFullscreen) {
+                iframe.webkitEnterFullscreen();
+            } else if (iframe?.webkitRequestFullscreen) {
+                iframe.webkitRequestFullscreen();
+            }
+        }
     }, []);
 
     // ── PiP handler ─────────────────────────────────────────────────────────
@@ -295,7 +325,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
             {/* Player fills the container */}
             <div
                 ref={playerDivRef}
-                style={{ width: '100%', height: '100%' }}
+                style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
             />
 
             {/* Click overlay for play/pause */}
