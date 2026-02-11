@@ -6,6 +6,7 @@ import Forward10Icon from '@mui/icons-material/Forward10';
 import Replay10Icon from '@mui/icons-material/Replay10';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import PictureInPictureAltIcon from '@mui/icons-material/PictureInPictureAlt';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePlayerStore } from '../store/usePlayerStore';
 
@@ -14,6 +15,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 interface VideoPlayerProps {
     youtubeId: string;
     compact?: boolean;
+    onVideoEnded?: () => void;
 }
 
 declare global {
@@ -23,8 +25,8 @@ declare global {
     }
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false }) => {
-    const { isPlaying, togglePlay, setPlaying, seekTime, setSeekTime } = usePlayerStore();
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, onVideoEnded }) => {
+    const { isPlaying, togglePlay, setPlaying, setSeekTime } = usePlayerStore();
     const containerRef = useRef<HTMLDivElement>(null);
     const playerDivRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
@@ -33,9 +35,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
     const [duration, setDuration] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [playerReady, setPlayerReady] = useState(false);
+    const [skipFeedback, setSkipFeedback] = useState<string | null>(null);
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const skipFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const currentVideoIdRef = useRef(youtubeId);
+    const onVideoEndedRef = useRef(onVideoEnded);
+
+    // Keep the callback ref fresh
+    useEffect(() => { onVideoEndedRef.current = onVideoEnded; }, [onVideoEnded]);
 
     const playerVars = {
         autoplay: 1,
@@ -98,6 +106,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
                             if (dur > 0) setDuration(dur);
                         } else if (event.data === window.YT.PlayerState.PAUSED) {
                             setPlaying(false);
+                        } else if (event.data === window.YT.PlayerState.ENDED) {
+                            setPlaying(false);
+                            onVideoEndedRef.current?.();
                         }
                     },
                 },
@@ -116,7 +127,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
     useEffect(() => {
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
-            // Save current playback time so the next player instance can resume
+            if (skipFeedbackTimerRef.current) clearTimeout(skipFeedbackTimerRef.current);
             try {
                 const t = playerRef.current?.getCurrentTime?.() || 0;
                 if (t > 0) setSeekTime(t);
@@ -158,10 +169,42 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
         return () => document.removeEventListener('fullscreenchange', h);
     }, []);
 
+    // ── Keyboard shortcuts ──────────────────────────────────────────────────
+    useEffect(() => {
+        if (compact) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't capture if user is typing in an input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            switch (e.key) {
+                case ' ':
+                    e.preventDefault();
+                    togglePlay();
+                    resetHideTimer();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    skip(-10);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    skip(10);
+                    break;
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [compact]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const resetHideTimer = useCallback(() => {
         setShowControls(true);
         if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
         hideTimerRef.current = setTimeout(() => setShowControls(false), 3000);
+    }, []);
+
+    const showSkipFeedback = useCallback((label: string) => {
+        setSkipFeedback(label);
+        if (skipFeedbackTimerRef.current) clearTimeout(skipFeedbackTimerRef.current);
+        skipFeedbackTimerRef.current = setTimeout(() => setSkipFeedback(null), 700);
     }, []);
 
     const skip = useCallback((seconds: number) => {
@@ -169,8 +212,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
             const t = Math.max(0, (playerRef.current.getCurrentTime?.() || 0) + seconds);
             playerRef.current.seekTo(t, true);
             setCurrentTime(t);
+            showSkipFeedback(seconds > 0 ? `+${seconds}s` : `${seconds}s`);
+            resetHideTimer();
         }
-    }, []);
+    }, [showSkipFeedback, resetHideTimer]);
 
     const handleSeek = useCallback((_: Event, value: number | number[]) => {
         const t = value as number;
@@ -192,6 +237,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
         else containerRef.current.requestFullscreen();
     }, []);
 
+    // ── PiP handler ─────────────────────────────────────────────────────────
+    const handlePiP = useCallback(async () => {
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+                return;
+            }
+            // Try to get the iframe and request PiP on it
+            const iframe = playerRef.current?.getIframe?.() as HTMLIFrameElement | undefined;
+            if (!iframe) return;
+
+            // Try getting the video element inside the iframe (same-origin only)
+            try {
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                const video = iframeDoc?.querySelector('video');
+                if (video && typeof video.requestPictureInPicture === 'function') {
+                    await video.requestPictureInPicture();
+                    return;
+                }
+            } catch (_) {
+                // Cross-origin — expected for YouTube
+            }
+
+            // Fallback: try PiP on the iframe element itself (Chrome 111+)
+            if (typeof (iframe as any).requestPictureInPicture === 'function') {
+                await (iframe as any).requestPictureInPicture();
+            }
+        } catch (err) {
+            console.warn('PiP not available:', err);
+        }
+    }, []);
+
+    const pipSupported = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document;
+
     if (compact) {
         return (
             <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -206,7 +285,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
             sx={{
                 position: 'relative',
                 width: '100%',
-                // height is controlled by the parent (flex child in PlayerPage)
                 height: '100%',
                 bgcolor: '#000',
             }}
@@ -234,6 +312,56 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
                     cursor: 'pointer',
                 }}
             />
+
+            {/* ── Skip Feedback Ripple ── */}
+            <AnimatePresence>
+                {skipFeedback && (
+                    <motion.div
+                        key={skipFeedback + Date.now()}
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 1.5 }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: 10,
+                            pointerEvents: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <Box
+                            sx={{
+                                bgcolor: 'rgba(0,0,0,0.7)',
+                                borderRadius: '50%',
+                                width: 80,
+                                height: 80,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px solid rgba(0,255,245,0.5)',
+                                boxShadow: '0 0 20px rgba(0,255,245,0.3)',
+                            }}
+                        >
+                            <Typography
+                                sx={{
+                                    color: '#00fff5',
+                                    fontFamily: "'Press Start 2P', monospace",
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    textShadow: '0 0 10px rgba(0,255,245,0.8)',
+                                }}
+                            >
+                                {skipFeedback}
+                            </Typography>
+                        </Box>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Custom Controls Overlay */}
             <AnimatePresence>
@@ -271,9 +399,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
                             }}
                         />
                         <Stack direction="row" alignItems="center" spacing={0.5}>
-                            <IconButton onClick={() => skip(-10)} sx={{ color: '#fff' }} size="small">
-                                <Replay10Icon fontSize="small" />
-                            </IconButton>
+                            {/* Skip back — with press animation */}
+                            <motion.div whileTap={{ scale: 0.75 }} whileHover={{ scale: 1.1 }}>
+                                <IconButton onClick={() => skip(-10)} sx={{ color: '#fff' }} size="small">
+                                    <Replay10Icon fontSize="small" />
+                                </IconButton>
+                            </motion.div>
+
+                            {/* Play/Pause */}
                             <IconButton
                                 onClick={(e) => { e.stopPropagation(); togglePlay(); }}
                                 sx={{
@@ -285,9 +418,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
                             >
                                 {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
                             </IconButton>
-                            <IconButton onClick={() => skip(10)} sx={{ color: '#fff' }} size="small">
-                                <Forward10Icon fontSize="small" />
-                            </IconButton>
+
+                            {/* Skip forward — with press animation */}
+                            <motion.div whileTap={{ scale: 0.75 }} whileHover={{ scale: 1.1 }}>
+                                <IconButton onClick={() => skip(10)} sx={{ color: '#fff' }} size="small">
+                                    <Forward10Icon fontSize="small" />
+                                </IconButton>
+                            </motion.div>
+
                             <Typography
                                 variant="caption"
                                 sx={{
@@ -299,6 +437,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false })
                             >
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </Typography>
+
+                            {/* PiP button */}
+                            {pipSupported && (
+                                <motion.div whileTap={{ scale: 0.8 }}>
+                                    <IconButton onClick={handlePiP} sx={{ color: '#fff' }} size="small">
+                                        <PictureInPictureAltIcon fontSize="small" />
+                                    </IconButton>
+                                </motion.div>
+                            )}
+
+                            {/* Fullscreen */}
                             <IconButton onClick={handleFullscreen} sx={{ color: '#fff' }} size="small">
                                 {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
                             </IconButton>

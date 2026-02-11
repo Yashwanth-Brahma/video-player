@@ -40,3 +40,11 @@ export const categoryGroups: CategoryGroup[] = dataset.categories.map((entry) =>
 /** Get related videos (same category, excluding the current video) */
 export const getRelatedVideos = (video: Video): Video[] =>
     allVideos.filter((v) => v.category === video.category && v.id !== video.id);
+
+/** Get the next video in the same category (wraps around) */
+export const getNextVideo = (video: Video): Video | null => {
+    const categoryVideos = allVideos.filter((v) => v.category === video.category);
+    if (categoryVideos.length <= 1) return null;
+    const idx = categoryVideos.findIndex((v) => v.id === video.id);
+    return categoryVideos[(idx + 1) % categoryVideos.length];
+};
