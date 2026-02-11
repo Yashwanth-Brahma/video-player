@@ -34,6 +34,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isCssFullscreen, setIsCssFullscreen] = useState(false);
     const [playerReady, setPlayerReady] = useState(false);
     const [skipFeedback, setSkipFeedback] = useState<string | null>(null);
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -243,29 +244,38 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         const el = containerRef.current as any;
         if (!el) return;
 
-        // Check if already fullscreen
-        const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
-        if (fsEl) {
-            if (document.exitFullscreen) document.exitFullscreen();
-            else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+        // ── EXIT fullscreen ──
+        if (isFullscreen || isCssFullscreen) {
+            // Exit native fullscreen
+            const fsEl = document.fullscreenElement || (document as any).webkitFullscreenElement;
+            if (fsEl) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+            }
+            // Exit CSS fullscreen (iOS)
+            if (isCssFullscreen) {
+                setIsCssFullscreen(false);
+                setIsFullscreen(false);
+            }
             return;
         }
 
-        // Try standard → webkit (Safari/iOS)
+        // ── ENTER fullscreen ──
+        // Try native API first (works on desktop + Android)
         if (el.requestFullscreen) {
-            el.requestFullscreen();
+            el.requestFullscreen().catch(() => {
+                // Native failed — fall back to CSS fullscreen (iOS)
+                setIsCssFullscreen(true);
+                setIsFullscreen(true);
+            });
         } else if (el.webkitRequestFullscreen) {
             el.webkitRequestFullscreen();
         } else {
-            // iOS fallback: fullscreen the iframe itself
-            const iframe = playerRef.current?.getIframe?.() as any;
-            if (iframe?.webkitEnterFullscreen) {
-                iframe.webkitEnterFullscreen();
-            } else if (iframe?.webkitRequestFullscreen) {
-                iframe.webkitRequestFullscreen();
-            }
+            // iOS: no native fullscreen at all → use CSS fullscreen
+            setIsCssFullscreen(true);
+            setIsFullscreen(true);
         }
-    }, []);
+    }, [isFullscreen, isCssFullscreen]);
 
     // ── PiP handler ─────────────────────────────────────────────────────────
     const handlePiP = useCallback(async () => {
@@ -313,9 +323,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         <Box
             ref={containerRef}
             sx={{
-                position: 'relative',
-                width: '100%',
-                height: '100%',
+                position: isCssFullscreen ? 'fixed' : 'relative',
+                ...(isCssFullscreen ? {
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 99999,
+                    width: '100vw',
+                    height: '100vh',
+                } : {
+                    width: '100%',
+                    height: '100%',
+                }),
                 bgcolor: '#000',
             }}
             onMouseMove={resetHideTimer}
