@@ -1,73 +1,159 @@
-# React + TypeScript + Vite
+# 🎬 Retro Play — Video Player
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A feature-rich, mobile-first video player built with **React + TypeScript + Vite**. Streams YouTube content with custom controls, mini player, keyboard shortcuts, auto-play, and more.
 
-Currently, two official plugins are available:
+🔗 **Live Demo:** [video-player-3.vercel.app](https://video-player-3.vercel.app/)
+📦 **GitHub Repo:** [github.com/Yashwanth-Brahma/video-player](https://github.com/Yashwanth-Brahma/video-player)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 📸 Screenshots
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Home Page
+Browse videos by category with thumbnails, titles, and durations — responsive grid layout.
 
-## Expanding the ESLint configuration
+![Home Page](screenshots/home-page.png)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Video Player with Controls
+Full player view with custom control bar, video title, category tag, and related videos list.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+![Player Page](screenshots/player-page.png)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Player Controls
+Custom control bar with skip ±10s, play/pause, progress bar, time display, PiP, and fullscreen.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+![Controls](screenshots/controls.png)
+
+### Skip Feedback Animation
+Visual ripple animation showing `+10s` / `-10s` in the center when skipping.
+
+![Skip Feedback](screenshots/skip-feedback.png)
+
+### Mini Player
+Minimize to continue browsing while the video keeps playing in a docked mini player at the bottom.
+
+![Mini Player](screenshots/mini-player.png)
+
+---
+
+## ✨ Features
+
+### 🎮 Custom Video Controls
+- Play/Pause, Seek ±10s, Progress bar with drag
+- Time display (current / duration)
+- Controls auto-hide after 3 seconds of inactivity
+
+### ⌨️ Keyboard Shortcuts
+| Key | Action |
+|-----|--------|
+| `Space` | Play / Pause |
+| `←` Arrow Left | Skip back 10 seconds |
+| `→` Arrow Right | Skip forward 10 seconds |
+
+### 🔄 Skip Feedback Animation
+- Centered ripple animation with glowing cyan ring
+- Shows `+10s` or `-10s` label with scale & fade effect
+
+### ⏭️ Auto-Play Next Video
+- 2-second countdown overlay when a video ends
+- Shows next video's thumbnail and title
+- **Play Now** (instant) and **Cancel** buttons
+- Automatically advances through videos in the same category
+
+### 🖼️ Picture-in-Picture (PiP)
+- PiP button in the control bar
+- Uses the Browser PiP API with graceful fallback
+- Auto-hidden on browsers that don't support PiP
+
+### 📱 Mini Player
+- Minimize to a docked bottom bar while browsing
+- Shows video thumbnail, title, and category
+- Play/Pause, Expand, and Close controls
+- Video continuity preserved (resumes from where you left off)
+
+### 🔲 Fullscreen
+- Standard fullscreen on desktop and Android
+- CSS-based pseudo-fullscreen for iOS Safari & Chrome (uses `100dvh`)
+- Adapts to browser toolbar height to prevent clipping
+
+### 📂 Related Videos
+- Expandable related videos list below the player
+- Click any related video to switch instantly
+- Open by default — tap **HIDE** to collapse
+
+### 🌙 Dark Theme
+- Full dark mode with retro-styled neon cyan accents
+- Smooth gradient backgrounds and glassmorphism cards
+
+### 📱 Mobile First
+- Responsive grid layout (1–4 columns depending on screen size)
+- Touch-friendly controls and gestures
+- Optimized for iOS Safari, iOS Chrome, and Android
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| **React 19** | UI framework |
+| **TypeScript** | Type safety |
+| **Vite** | Build tool & dev server |
+| **Material UI (MUI)** | Component library |
+| **Framer Motion** | Animations & transitions |
+| **Zustand** | State management |
+| **YouTube IFrame API** | Video playback |
+
+---
+
+## 🚀 Getting Started
+
+```bash
+# Clone the repo
+git clone https://github.com/Yashwanth-Brahma/video-player.git
+cd video-player
+
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Production Build
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
+npm run preview
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── components/
+│   ├── VideoPlayer.tsx    # Core player with YouTube API, controls, shortcuts
+│   ├── MiniPlayer.tsx     # Docked mini player bar
+│   ├── RelatedVideos.tsx  # Related videos list
+│   ├── VideoCard.tsx      # Video thumbnail card
+│   └── ThemeToggle.tsx    # Dark/light mode toggle
+├── pages/
+│   ├── HomePage.tsx       # Video grid with categories
+│   └── PlayerPage.tsx     # Full player view + auto-play overlay
+├── store/
+│   └── usePlayerStore.ts  # Zustand store for player state
+├── data/
+│   ├── dataset.json       # Video metadata
+│   └── videoData.ts       # Data helpers + getNextVideo()
+└── types.ts               # TypeScript interfaces
+```
+
+---
+
+## 📄 License
+
+MIT
