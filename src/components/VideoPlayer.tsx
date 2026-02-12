@@ -338,8 +338,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
                 ...(isCssFullscreen ? {
                     top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 99999,
-                    width: '100vw',
-                    height: '100vh',
+                    width: '100dvw',
+                    height: '100dvh',
+                    // Fallbacks for older browsers that don't support dvh
+                    '@supports not (height: 100dvh)': {
+                        height: '-webkit-fill-available',
+                    },
                 } : {
                     width: '100%',
                     height: '100%',
