@@ -58,6 +58,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
         disablekb: 1,
         fs: 0,
         cc_load_policy: 0,
+        mute: 1,  // Start muted so iOS allows autoplay, unmute after first play
         origin: typeof window !== 'undefined' ? window.location.origin : '',
     };
 
@@ -107,6 +108,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeId, compact = false, o
                         if (event.data === window.YT.PlayerState.PLAYING) {
                             setPlaying(true);
                             setHasStartedPlaying(true);
+                            // Unmute after autoplay succeeds (iOS muted-autoplay workaround)
+                            try {
+                                if (event.target.isMuted?.()) {
+                                    event.target.unMute();
+                                    event.target.setVolume(100);
+                                }
+                            } catch (_) { }
                             const dur = event.target.getDuration?.() || 0;
                             if (dur > 0) setDuration(dur);
                         } else if (event.data === window.YT.PlayerState.PAUSED) {
